@@ -1,18 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
+  Text,
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
+import MapView, { Marker, PROVIDER_DEFAULT, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { useLocation } from '../hooks/useLocation';
 import { colors, spacing, typography, borderRadius, shadows } from '../theme/tokens';
-import { Card, Badge, StarRating, Avatar } from './base';
-import { MapPin, Plus, Navigation, Layers } from 'lucide-react-native';
+import { Card, Badge, StarRating } from './base';
+import { MapPin, Plus, Navigation, Layers, X } from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -22,9 +21,9 @@ interface Spot {
   description: string | null;
   latitude: number;
   longitude: number;
+  city: string | null;
   avg_rating: number;
   review_count: number;
-  city: string | null;
   image_url: string | null;
   created_by: {
     display_name: string | null;
@@ -39,6 +38,14 @@ interface MapScreenProps {
   loadingLocation?: boolean;
 }
 
+// Default region (Kassel, Germany)
+const DEFAULT_REGION = {
+  latitude: 51.3127,
+  longitude: 9.4797,
+  latitudeDelta: 0.05,
+  longitudeDelta: 0.05,
+};
+
 export function MapScreen({
   onSpotPress,
   onCreateSpot,
@@ -46,105 +53,111 @@ export function MapScreen({
   userLocation,
   loadingLocation,
 }: MapScreenProps) {
+  const mapRef = useRef<MapView>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Center on user location when it becomes available
+  useEffect(() => {
+    if (userLocation && mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        latitudeDelta: 0.03,
+        longitudeDelta: 0.03,
+      }, 500);
+    }
+  }, [userLocation]);
+
+  function handleCenterOnUser() {
+    if (userLocation && mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 500);
+    }
+  }
+
+  function handleMapReady() {
+    setMapReady(true);
+  }
+
   return (
     <View style={styles.container}>
-      {/* Map Area */}
-      <View style={styles.mapContainer}>
-        {/* Map Background with Grid Pattern */}
-        <View style={styles.mapBackground}>
-          {/* Grid Lines */}
-          <View style={styles.gridOverlay}>
-            {[...Array(6)].map((_, i) => (
-              <View key={`h-${i}`} style={[styles.gridLine, styles.gridLineHorizontal, { top: `${(i + 1) * 16.66}%` }]} />
-            ))}
-            {[...Array(4)].map((_, i) => (
-              <View key={`v-${i}`} style={[styles.gridLine, styles.gridLineVertical, { left: `${(i + 1) * 25}%` }]} />
-            ))}
-          </View>
-
-          {/* User Location Marker */}
-          {loadingLocation ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primary[500]} />
-              <Text style={styles.loadingText}>Standort wird ermittelt...</Text>
-            </View>
-          ) : userLocation ? (
-            <View style={styles.userMarkerContainer}>
-              {/* Pulsing ring */}
-              <View style={styles.pulseRing} />
-              {/* Main dot */}
-              <View style={styles.userDot} />
-              {/* Accuracy circle */}
-              <View style={styles.accuracyCircle} />
-            </View>
-          ) : (
-            <View style={styles.noLocationContainer}>
-              <Navigation size={32} color={colors.textMuted} />
-              <Text style={styles.noLocationText}>Standort nicht verfügbar</Text>
-              <TouchableOpacity style={styles.retryButton}>
-                <Text style={styles.retryText}>Erneut versuchen</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Mock Map Markers for Demo */}
-          {spots.length > 0 && spots.map((spot, index) => (
-            <TouchableOpacity
-              key={spot.id}
-              style={[
-                styles.spotMarker,
-                {
-                  left: `${20 + (index * 25) % 60}%`,
-                  top: `${30 + (index * 17) % 40}%`,
-                },
-              ]}
-              onPress={() => onSpotPress?.(spot)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.markerPin}>
-                <MapPin size={20} color="#fff" />
+      {/* Map */}
+      <MapView
+        ref={mapRef}
+        style={styles.map}
+        provider={PROVIDER_DEFAULT}
+        initialRegion={userLocation ? {
+          latitude: userLocation.latitude,
+          longitude: userLocation.longitude,
+          latitudeDelta: 0.03,
+          longitudeDelta: 0.03,
+        } : DEFAULT_REGION}
+        onMapReady={handleMapReady}
+        showsUserLocation={true}
+        showsMyLocationButton={false}
+        showsCompass={true}
+        mapType="standard"
+      >
+        {/* Spot Markers */}
+        {spots.map((spot) => (
+          <Marker
+            key={spot.id}
+            coordinate={{
+              latitude: spot.latitude,
+              longitude: spot.longitude,
+            }}
+            onPress={() => onSpotPress?.(spot)}
+          >
+            <View style={styles.markerContainer}>
+              <View style={styles.markerDot}>
+                <MapPin size={16} color="#fff" />
               </View>
-              <View style={styles.markerLabel}>
-                <Text style={styles.markerLabelText} numberOfLines={1}>
-                  {spot.title}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+              <View style={styles.markerTail} />
+            </View>
+          </Marker>
+        ))}
+      </MapView>
 
-        {/* Map Controls */}
-        <View style={styles.mapControls}>
-          <TouchableOpacity style={styles.mapControlButton} activeOpacity={0.7}>
-            <Layers size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* My Location Button */}
-        {userLocation && (
-          <TouchableOpacity style={styles.myLocationButton} activeOpacity={0.7}>
-            <Navigation size={20} color={colors.primary[500]} />
-          </TouchableOpacity>
-        )}
-
-        {/* Map Attribution */}
-        <View style={styles.attribution}>
-          <Text style={styles.attributionText}>OpenStreetMap</Text>
-        </View>
+      {/* Map Controls */}
+      <View style={styles.topControls}>
+        <TouchableOpacity
+          style={styles.filterButton}
+          onPress={() => setShowFilters(!showFilters)}
+          activeOpacity={0.7}
+        >
+          <Layers size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
       </View>
 
-      {/* Spots List */}
-      <View style={styles.listContainer}>
+      {/* My Location Button */}
+      <TouchableOpacity
+        style={styles.myLocationButton}
+        onPress={handleCenterOnUser}
+        activeOpacity={0.7}
+      >
+        <Navigation size={20} color={colors.primary[500]} />
+      </TouchableOpacity>
+
+      {/* Bottom Sheet with Spot Cards */}
+      <View style={styles.bottomSheet}>
+        {/* Handle */}
+        <View style={styles.handleContainer}>
+          <View style={styles.handle} />
+        </View>
+
+        {/* Header */}
         <View style={styles.listHeader}>
           <Text style={styles.listTitle}>Geheimtipps in der Nähe</Text>
           <Badge label={`${spots.length} Orte`} variant="default" />
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.spotCardsContainer}
-        >
+        {/* Spot Cards Horizontal Scroll */}
+        <View style={styles.cardsContainer}>
           {spots.length === 0 ? (
             <View style={styles.emptyState}>
               <MapPin size={40} color={colors.neutral[300]} />
@@ -159,8 +172,9 @@ export function MapScreen({
                 key={spot.id}
                 onPress={() => onSpotPress?.(spot)}
                 activeOpacity={0.8}
+                style={styles.spotCardWrapper}
               >
-                <Card style={styles.spotCard}>
+                <Card style={styles.spotCard} elevated>
                   {/* Placeholder Image */}
                   <View style={styles.spotImagePlaceholder}>
                     <MapPin size={24} color={colors.neutral[400]} />
@@ -185,7 +199,7 @@ export function MapScreen({
               </TouchableOpacity>
             ))
           )}
-        </ScrollView>
+        </View>
       </View>
 
       {/* Create Spot FAB */}
@@ -205,135 +219,42 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-
-  // Map Styles
-  mapContainer: {
+  map: {
     flex: 1,
-    position: 'relative',
-  },
-  mapBackground: {
-    flex: 1,
-    backgroundColor: '#e8e4df',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  gridOverlay: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  gridLine: {
-    position: 'absolute',
-    backgroundColor: 'rgba(0,0,0,0.04)',
-  },
-  gridLineHorizontal: {
-    left: 0,
-    right: 0,
-    height: 1,
-  },
-  gridLineVertical: {
-    top: 0,
-    bottom: 0,
-    width: 1,
   },
 
-  // User Location
-  loadingContainer: {
-    alignItems: 'center',
-    gap: spacing[3],
-  },
-  loadingText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.textMuted,
-  },
-  noLocationContainer: {
-    alignItems: 'center',
-    gap: spacing[3],
-  },
-  noLocationText: {
-    fontSize: typography.fontSize.base,
-    color: colors.textMuted,
-  },
-  retryButton: {
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
-    backgroundColor: colors.primary[50],
-    borderRadius: borderRadius.sm,
-  },
-  retryText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.primary[500],
-    fontWeight: typography.fontWeight.medium,
-  },
-  userMarkerContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 60,
-    height: 60,
-  },
-  pulseRing: {
-    position: 'absolute',
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.primary[500],
-    opacity: 0.25,
-  },
-  userDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.primary[500],
-    borderWidth: 3,
-    borderColor: '#fff',
-    ...shadows.md,
-  },
-  accuracyCircle: {
-    position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 1,
-    borderColor: 'rgba(45, 138, 94, 0.3)',
-    backgroundColor: 'rgba(45, 138, 94, 0.05)',
-  },
-
-  // Spot Markers
-  spotMarker: {
-    position: 'absolute',
+  // Marker Styles
+  markerContainer: {
     alignItems: 'center',
   },
-  markerPin: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  markerDot: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.accent[500],
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.md,
   },
-  markerLabel: {
-    marginTop: spacing[1],
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing[2],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.sm,
-    maxWidth: 100,
-    ...shadows.sm,
-  },
-  markerLabelText: {
-    fontSize: typography.fontSize.xs,
-    color: colors.textPrimary,
-    fontWeight: typography.fontWeight.medium,
+  markerTail: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 8,
+    borderRightWidth: 8,
+    borderTopWidth: 10,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: colors.accent[500],
+    marginTop: -2,
   },
 
-  // Map Controls
-  mapControls: {
+  // Controls
+  topControls: {
     position: 'absolute',
     top: spacing[4],
     right: spacing[4],
-    gap: spacing[2],
   },
-  mapControlButton: {
+  filterButton: {
     width: 44,
     height: 44,
     borderRadius: borderRadius.md,
@@ -344,7 +265,7 @@ const styles = StyleSheet.create({
   },
   myLocationButton: {
     position: 'absolute',
-    bottom: spacing[4],
+    bottom: 220,
     right: spacing[4],
     width: 52,
     height: 52,
@@ -354,29 +275,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.lg,
   },
-  attribution: {
-    position: 'absolute',
-    bottom: spacing[2],
-    left: spacing[3],
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    paddingHorizontal: spacing[2],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.sm,
-  },
-  attributionText: {
-    fontSize: 10,
-    color: colors.textMuted,
-  },
 
-  // List Styles
-  listContainer: {
+  // Bottom Sheet
+  bottomSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: colors.surface,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    marginTop: -borderRadius.xl,
-    paddingTop: spacing[6],
-    paddingBottom: spacing[6],
-    ...shadows.lg,
+    paddingTop: spacing[3],
+    paddingBottom: spacing[8],
+    ...shadows.xl,
+  },
+  handleContainer: {
+    alignItems: 'center',
+    marginBottom: spacing[2],
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.neutral[300],
   },
   listHeader: {
     flexDirection: 'row',
@@ -390,12 +311,14 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
     color: colors.textPrimary,
   },
-  spotCardsContainer: {
-    paddingHorizontal: spacing[6],
-    gap: spacing[4],
+  cardsContainer: {
+    paddingHorizontal: spacing[4],
+    gap: spacing[3],
+  },
+  spotCardWrapper: {
+    width: SCREEN_WIDTH * 0.55,
   },
   spotCard: {
-    width: SCREEN_WIDTH * 0.55,
     padding: 0,
     overflow: 'hidden',
   },

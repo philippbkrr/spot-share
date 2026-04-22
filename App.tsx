@@ -5,10 +5,12 @@ import { MapScreen } from './src/components/MapScreen';
 import { AuthScreen } from './src/components/AuthScreen';
 import { CreateSpotScreen } from './src/components/CreateSpotScreen';
 import { SpotDetailScreen } from './src/components/SpotDetailScreen';
+import { ProfileScreen } from './src/components/ProfileScreen';
 import { useAuth } from './src/hooks/useAuth';
 import { useLocation } from './src/hooks/useLocation';
 import { supabase } from './src/lib/supabase';
-import { colors, spacing, typography } from './src/theme/tokens';
+import { colors, spacing, typography, borderRadius, shadows } from './src/theme/tokens';
+import { User } from 'lucide-react-native';
 
 interface Spot {
   id: string;
@@ -33,6 +35,7 @@ export default function App() {
   const [spots, setSpots] = useState<Spot[]>([]);
   const [fetchingSpots, setFetchingSpots] = useState(true);
   const [showCreateSpot, setShowCreateSpot] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
 
   React.useEffect(() => {
@@ -76,7 +79,6 @@ export default function App() {
   }
 
   function handleSpotDetailReviewAdded() {
-    // Refresh spots to get updated avg_rating
     fetchSpots();
   }
 
@@ -91,6 +93,15 @@ export default function App() {
   function handleCreateSpotSuccess() {
     setShowCreateSpot(false);
     fetchSpots();
+  }
+
+  function handleProfileClose() {
+    setShowProfile(false);
+  }
+
+  function handleProfileSpotPress(spot: Spot) {
+    setShowProfile(false);
+    setSelectedSpot(spot);
   }
 
   // Show loading state while checking auth
@@ -120,6 +131,16 @@ export default function App() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
+
+      {/* Profile Button (fixed top right) */}
+      <TouchableOpacity
+        style={styles.profileButton}
+        onPress={() => setShowProfile(true)}
+        activeOpacity={0.7}
+      >
+        <User size={22} color={colors.textSecondary} />
+      </TouchableOpacity>
+
       <MapScreen
         userLocation={location}
         loadingLocation={false}
@@ -157,6 +178,19 @@ export default function App() {
           />
         )}
       </Modal>
+
+      {/* Profile Modal */}
+      <Modal
+        visible={showProfile}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={handleProfileClose}
+      >
+        <ProfileScreen
+          onClose={handleProfileClose}
+          onMySpotPress={handleProfileSpotPress}
+        />
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -165,6 +199,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  profileButton: {
+    position: 'absolute',
+    top: spacing[4],
+    right: spacing[4],
+    zIndex: 100,
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.md,
   },
   loadingContainer: {
     flex: 1,

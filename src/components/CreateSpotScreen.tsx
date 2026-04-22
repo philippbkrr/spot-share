@@ -9,17 +9,24 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../lib/supabase';
 import { colors, spacing, typography, borderRadius, shadows } from '../theme/tokens';
 import { Button, Input, Card } from './base';
-import { MapPin, Navigation, X, Image, Tag } from 'lucide-react-native';
+import { MapPin, Navigation, X, Image as ImageIcon, Plus, Trash2 } from 'lucide-react-native';
 
 interface CreateSpotScreenProps {
   onClose?: () => void;
   onSuccess?: () => void;
   initialLocation?: { latitude: number; longitude: number } | null;
+}
+
+interface ImageItem {
+  uri: string;
+  filename: string;
 }
 
 export function CreateSpotScreen({ onClose, onSuccess, initialLocation }: CreateSpotScreenProps) {
@@ -30,6 +37,8 @@ export function CreateSpotScreen({ onClose, onSuccess, initialLocation }: Create
     initialLocation || null
   );
   const [city, setCity] = useState('');
+  const [images, setImages] = useState<ImageItem[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +60,6 @@ export function CreateSpotScreen({ onClose, onSuccess, initialLocation }: Create
         longitude: loc.coords.longitude,
       });
 
-      // Reverse geocode to get city name
       const [address] = await Location.reverseGeocodeAsync({
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
@@ -65,6 +73,84 @@ export function CreateSpotScreen({ onClose, onSuccess, initialLocation }: Create
     } finally {
       setLoadingLocation(false);
     }
+  }
+
+  async function handlePickImage() {
+    if (images.length >= 5) {
+      Alert.alert('Limit', 'Maximal 5 Fotos möglich');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      const filename = asset.uri.split('/').pop() || `photo_${Date.now()}.jpg`;
+      setImages([...images, { uri: asset.uri, filename }]);
+    }
+  }
+
+  async function handleTakePhoto() {
+    if (images.length >= 5) {
+      Alert.alert('Limit', 'Maximal 5 Fotos möglich');
+      return;
+    }
+
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Fehler', 'Kamera-Berechtigung benötigt');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      const filename = `photo_${Date.now()}.jpg`;
+      setImages([...images, { uri: asset.uri, filename }]);
+    }
+  }
+
+  function handleRemoveImage(index: number) {
+    setImages(images.filter((_, i) => i !== index));
+  }
+
+  async function uploadImages(userId: string, spotId: string): Promise<string[]> {
+    const uploadedUrls: string[] = [];
+
+    for (const image of images) {
+      const ext = image.filename.split('.').pop() || 'jpg';
+      const path = `${userId}/${spotId}/${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('spot-images')
+        .upload(path, {
+          uri: image.uri,
+          type: `image/${ext}`,
+        });
+
+      if (uploadError) {
+        console.log('Upload error:', uploadError);
+        continue;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('spot-images')
+        .getPublicUrl(path);
+
+      uploadedUrls.push(urlData.publicUrl);
+    }
+
+    return uploadedUrls;
   }
 
   async function handleSubmit() {
@@ -85,16 +171,32 @@ export function CreateSpotScreen({ onClose, onSuccess, initialLocation }: Create
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Nicht eingeloggt');
 
-      const { error } = await supabase.from('spots').insert({
-        created_by: user.id,
-        title: title.trim(),
-        description: description.trim() || null,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        city: city || null,
-      });
+      // Create spot
+      const { data: spotData, error: spotError } = await supabase
+        .from('spots')
+        .insert({
+          created_by: user.id,
+          title: title.trim(),
+          description: description.trim() || null,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          city: city || null,
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (spotError) throw spotError;
+
+      // Upload images if any
+      if (images.length > 0) {
+        const imageUrls = await uploadImages(user.id, spotData.id);
+        if (imageUrls.length > 0) {
+          await supabase
+            .from('spots')
+            .update({ image_urls: imageUrls })
+            .eq('id', spotData.id);
+        }
+      }
 
       Alert.alert('Erfolg', 'Geheimtipp wurde erstellt!', [
         { text: 'OK', onPress: () => onSuccess?.() },
@@ -188,10 +290,6 @@ export function CreateSpotScreen({ onClose, onSuccess, initialLocation }: Create
               )}
             </TouchableOpacity>
           )}
-
-          <Text style={styles.hint}>
-            Du kannst auch den Standort auf der Karte wählen (Coming soon)
-          </Text>
         </View>
 
         {/* City Input */}
@@ -204,13 +302,45 @@ export function CreateSpotScreen({ onClose, onSuccess, initialLocation }: Create
           />
         </View>
 
-        {/* Image Upload Placeholder */}
+        {/* Image Upload Section */}
         <View style={styles.section}>
-          <Text style={styles.label}>Fotos (coming soon)</Text>
-          <TouchableOpacity style={styles.imageUpload} disabled activeOpacity={0.7}>
-            <Image size={32} color={colors.neutral[400]} />
-            <Text style={styles.imageUploadText}>Foto hinzufügen</Text>
-          </TouchableOpacity>
+          <Text style={styles.label}>Fotos ({images.length}/5)</Text>
+
+          {/* Image Grid */}
+          <View style={styles.imageGrid}>
+            {images.map((image, index) => (
+              <View key={index} style={styles.imageItem}>
+                <Image source={{ uri: image.uri }} style={styles.imagePreview} />
+                <TouchableOpacity
+                  style={styles.removeImageButton}
+                  onPress={() => handleRemoveImage(index)}
+                >
+                  <Trash2 size={16} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            ))}
+
+            {images.length < 5 && (
+              <View style={styles.imageActions}>
+                <TouchableOpacity
+                  style={styles.imageActionButton}
+                  onPress={handleTakePhoto}
+                  activeOpacity={0.7}
+                >
+                  <Plus size={24} color={colors.primary[500]} />
+                  <Text style={styles.imageActionText}>Foto</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.imageActionButton}
+                  onPress={handlePickImage}
+                  activeOpacity={0.7}
+                >
+                  <ImageIcon size={24} color={colors.primary[500]} />
+                  <Text style={styles.imageActionText}>Galerie</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Error */}
@@ -329,26 +459,53 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     backgroundColor: colors.neutral[100],
   },
-  hint: {
-    fontSize: typography.fontSize.xs,
-    color: colors.textMuted,
-    fontStyle: 'italic',
-  },
-  imageUpload: {
+  imageGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[3],
+  },
+  imageItem: {
+    width: 100,
+    height: 100,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  imagePreview: {
+    width: '100%',
+    height: '100%',
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: spacing[1],
+    right: spacing[1],
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  imageActions: {
+    flexDirection: 'row',
     gap: spacing[3],
-    paddingVertical: spacing[8],
+  },
+  imageActionButton: {
+    width: 100,
+    height: 100,
+    borderRadius: borderRadius.md,
     backgroundColor: colors.neutral[50],
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: colors.neutral[200],
     borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
   },
-  imageUploadText: {
-    fontSize: typography.fontSize.base,
-    color: colors.textMuted,
+  imageActionText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[500],
+    fontWeight: typography.fontWeight.medium,
   },
   errorContainer: {
     backgroundColor: colors.error + '15',
