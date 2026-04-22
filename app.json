@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "SpotShare",
-    "slug": "SpotShare",
+    "slug": "spot-share",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -10,21 +10,49 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#2d8a5e"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.spotshare.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "SpotShare braucht deinen Standort um Geheimtipps in deiner Nähe anzuzeigen.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "SpotShare braucht deinen Standort um Geheimtipps in deiner Nähe anzuzeigen.",
+        "NSCameraUsageDescription": "SpotShare nutzt die Kamera um Fotos von Orten zu machen.",
+        "NSPhotoLibraryUsageDescription": "SpotShare braucht Zugriff auf deine Fotos um Bilder für Geheimtipps auszuwählen."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#2d8a5e"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "package": "com.spotshare.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "SpotShare braucht deinen Standort um Geheimtipps in deiner Nähe anzuzeigen."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SpotShare braucht Zugriff auf deine Fotos um Bilder für Geheimtipps auszuwählen.",
+          "cameraPermission": "SpotShare nutzt die Kamera um Fotos von Orten zu machen."
+        }
+      ]
+    ]
   }
 }
