@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, StyleSheet, View, Text, ActivityIndicator } from 'react-native';
+import { SafeAreaView, StyleSheet, View, Text, ActivityIndicator, Modal, TouchableOpacity } from 'react-native';
 import { MapScreen } from './src/components/MapScreen';
 import { AuthScreen } from './src/components/AuthScreen';
+import { CreateSpotScreen } from './src/components/CreateSpotScreen';
 import { useAuth } from './src/hooks/useAuth';
 import { useLocation } from './src/hooks/useLocation';
 import { supabase } from './src/lib/supabase';
 import { colors, spacing, typography } from './src/theme/tokens';
+import { X } from 'lucide-react-native';
 
 interface Spot {
   id: string;
@@ -23,10 +25,11 @@ interface Spot {
 }
 
 export default function App() {
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { location, loading: locationLoading } = useLocation();
-  const [spots, setSpots] = React.useState<Spot[]>([]);
-  const [fetchingSpots, setFetchingSpots] = React.useState(true);
+  const [spots, setSpots] = useState<Spot[]>([]);
+  const [fetchingSpots, setFetchingSpots] = useState(true);
+  const [showCreateSpot, setShowCreateSpot] = useState(false);
 
   React.useEffect(() => {
     fetchSpots();
@@ -60,7 +63,6 @@ export default function App() {
 
   function handleAuthSuccess() {
     console.log('Auth successful');
-    // Navigation will happen automatically via useAuth state change
   }
 
   function handleSpotPress(spot: Spot) {
@@ -68,7 +70,16 @@ export default function App() {
   }
 
   function handleCreateSpot() {
-    console.log('Create new spot - needs auth');
+    setShowCreateSpot(true);
+  }
+
+  function handleCreateSpotClose() {
+    setShowCreateSpot(false);
+  }
+
+  function handleCreateSpotSuccess() {
+    setShowCreateSpot(false);
+    fetchSpots(); // Refresh spots list
   }
 
   // Show loading state while checking auth
@@ -106,6 +117,20 @@ export default function App() {
         onSpotPress={handleSpotPress}
         onCreateSpot={handleCreateSpot}
       />
+
+      {/* Create Spot Modal */}
+      <Modal
+        visible={showCreateSpot}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={handleCreateSpotClose}
+      >
+        <CreateSpotScreen
+          onClose={handleCreateSpotClose}
+          onSuccess={handleCreateSpotSuccess}
+          initialLocation={location}
+        />
+      </Modal>
     </SafeAreaView>
   );
 }
