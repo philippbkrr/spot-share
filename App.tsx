@@ -5,6 +5,7 @@ import { MapScreen } from './src/components/MapScreen';
 import { AuthScreen } from './src/components/AuthScreen';
 import { CreateSpotScreen } from './src/components/CreateSpotScreen';
 import { SpotDetailScreen } from './src/components/SpotDetailScreen';
+import { EditSpotScreen } from './src/components/EditSpotScreen';
 import { ProfileScreen } from './src/components/ProfileScreen';
 import { useAuth } from './src/hooks/useAuth';
 import { useLocation } from './src/hooks/useLocation';
@@ -23,6 +24,7 @@ interface Spot {
   avg_rating: number;
   review_count: number;
   view_count: number;
+  image_urls: string[] | null;
   created_by: {
     display_name: string | null;
     username: string;
@@ -37,6 +39,8 @@ export default function App() {
   const [showCreateSpot, setShowCreateSpot] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
+  const [showEditSpot, setShowEditSpot] = useState(false);
+  const [editingSpot, setEditingSpot] = useState<Spot | null>(null);
 
   React.useEffect(() => {
     fetchSpots();
@@ -57,6 +61,7 @@ export default function App() {
           avg_rating,
           review_count,
           view_count,
+          image_urls,
           created_by:profiles!created_by(display_name, username)
         `)
         .limit(20);
@@ -76,6 +81,11 @@ export default function App() {
 
   function handleSpotDetailClose() {
     setSelectedSpot(null);
+  }
+
+  function handleSpotDetailEdit(spot: Spot) {
+    setEditingSpot(spot);
+    setShowEditSpot(true);
   }
 
   function handleSpotDetailReviewAdded() {
@@ -102,6 +112,25 @@ export default function App() {
   function handleProfileSpotPress(spot: Spot) {
     setShowProfile(false);
     setSelectedSpot(spot);
+  }
+
+  function handleEditSpotClose() {
+    setShowEditSpot(false);
+    setEditingSpot(null);
+  }
+
+  function handleEditSpotSuccess() {
+    setShowEditSpot(false);
+    setEditingSpot(null);
+    fetchSpots();
+    setSelectedSpot(null);
+  }
+
+  function handleEditSpotDelete() {
+    setShowEditSpot(false);
+    setEditingSpot(null);
+    setSelectedSpot(null);
+    fetchSpots();
   }
 
   // Show loading state while checking auth
@@ -174,7 +203,25 @@ export default function App() {
           <SpotDetailScreen
             spot={selectedSpot}
             onClose={handleSpotDetailClose}
+            onEdit={() => handleSpotDetailEdit(selectedSpot)}
             onReviewAdded={handleSpotDetailReviewAdded}
+          />
+        )}
+      </Modal>
+
+      {/* Edit Spot Modal */}
+      <Modal
+        visible={showEditSpot}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={handleEditSpotClose}
+      >
+        {editingSpot && (
+          <EditSpotScreen
+            spot={editingSpot}
+            onClose={handleEditSpotClose}
+            onSuccess={handleEditSpotSuccess}
+            onDelete={handleEditSpotDelete}
           />
         )}
       </Modal>

@@ -13,7 +13,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { colors, spacing, typography, borderRadius, shadows } from '../theme/tokens';
 import { Card, Avatar, Badge, StarRating, Button, Input } from './base';
-import { MapPin, Calendar, User, MessageCircle, ThumbsUp, Flag, Share2, ChevronLeft, Send } from 'lucide-react-native';
+import { MapPin, Calendar, User, MessageCircle, ThumbsUp, Flag, Share2, ChevronLeft, Send, Edit2 } from 'lucide-react-native';
 
 interface SpotDetailScreenProps {
   spot: {
@@ -27,12 +27,14 @@ interface SpotDetailScreenProps {
     avg_rating: number;
     review_count: number;
     view_count: number;
+    image_urls: string[] | null;
     created_by: {
       display_name: string | null;
       username: string;
     };
   };
   onClose?: () => void;
+  onEdit?: () => void;
   onReviewAdded?: () => void;
 }
 
@@ -59,8 +61,9 @@ interface Comment {
   };
 }
 
-export function SpotDetailScreen({ spot, onClose, onReviewAdded }: SpotDetailScreenProps) {
+export function SpotDetailScreen({ spot, onClose, onEdit, onReviewAdded }: SpotDetailScreenProps) {
   const { user } = useAuth();
+  const isOwner = user?.id === spot.created_by?.username || user?.id === spot.created_by?.display_name;
   const [reviews, setReviews] = useState<Review[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -204,9 +207,16 @@ export function SpotDetailScreen({ spot, onClose, onReviewAdded }: SpotDetailScr
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle} numberOfLines={1}>{spot.title}</Text>
         </View>
-        <TouchableOpacity style={styles.shareButton}>
-          <Share2 size={20} color={colors.textSecondary} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {user?.id === (spot.created_by as any)?.id && (
+            <TouchableOpacity onPress={onEdit} style={styles.editButton}>
+              <Edit2 size={20} color={colors.primary[500]} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.shareButton}>
+            <Share2 size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
@@ -476,6 +486,17 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   shareButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+  },
+  editButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
