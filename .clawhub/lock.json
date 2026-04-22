@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "ui-ux-design": {
+      "version": "1.0.0",
+      "installedAt": 1776838023598
+    },
+    "shadcn-ui": {
+      "version": "1.0.0",
+      "installedAt": 1776838041602
+    },
+    "react-native": {
+      "version": "1.0.0",
+      "installedAt": 1776838085087
+    }
+  }
+}

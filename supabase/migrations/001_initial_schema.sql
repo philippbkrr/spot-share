@@ -4,6 +4,7 @@
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- =============================================
 -- TABLES
@@ -21,23 +22,23 @@ CREATE TABLE public.profiles (
 
 -- Categories (optional, for future filtering)
 CREATE TABLE public.categories (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
-  icon TEXT, -- emoji or icon name
-  color TEXT, -- hex color for markers
+  icon TEXT,
+  color TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Spots (Geheimtipps)
 CREATE TABLE public.spots (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   created_by UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT,
   latitude DECIMAL(10, 8) NOT NULL,
   longitude DECIMAL(11, 8) NOT NULL,
   category_id UUID REFERENCES public.categories(id),
-  image_urls TEXT[], -- array of image URLs
+  image_urls TEXT[],
   city TEXT,
   region TEXT,
   is_verified BOOLEAN DEFAULT FALSE,
@@ -48,19 +49,19 @@ CREATE TABLE public.spots (
 
 -- Reviews
 CREATE TABLE public.reviews (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   spot_id UUID NOT NULL REFERENCES public.spots(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
   comment TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(spot_id, user_id) -- one review per spot per user
+  UNIQUE(spot_id, user_id)
 );
 
 -- Comments on spots
 CREATE TABLE public.comments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   spot_id UUID NOT NULL REFERENCES public.spots(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
@@ -72,7 +73,6 @@ CREATE TABLE public.comments (
 -- FUNCTIONS & TRIGGERS
 -- =============================================
 
--- Auto-update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -93,7 +93,6 @@ CREATE TRIGGER comments_updated_at
   BEFORE UPDATE ON public.comments
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- Auto-create profile on signup
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -121,27 +120,27 @@ ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 
--- Profiles: public read, own write
+-- Profiles
 CREATE POLICY "Profiles are publicly readable" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
--- Categories: public read
+-- Categories
 CREATE POLICY "Categories are publicly readable" ON public.categories FOR SELECT USING (true);
 
--- Spots: public read, authenticated create, own update
+-- Spots
 CREATE POLICY "Spots are publicly readable" ON public.spots FOR SELECT USING (true);
 CREATE POLICY "Authenticated users can create spots" ON public.spots FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "Users can update own spots" ON public.spots FOR UPDATE USING (auth.uid() = created_by);
 CREATE POLICY "Users can delete own spots" ON public.spots FOR DELETE USING (auth.uid() = created_by);
 
--- Reviews: public read, authenticated create, own update
+-- Reviews
 CREATE POLICY "Reviews are publicly readable" ON public.reviews FOR SELECT USING (true);
 CREATE POLICY "Authenticated users can create reviews" ON public.reviews FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "Users can update own reviews" ON public.reviews FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own reviews" ON public.reviews FOR DELETE USING (auth.uid() = user_id);
 
--- Comments: public read, authenticated create, own update
+-- Comments
 CREATE POLICY "Comments are publicly readable" ON public.comments FOR SELECT USING (true);
 CREATE POLICY "Authenticated users can create comments" ON public.comments FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "Users can update own comments" ON public.comments FOR UPDATE USING (auth.uid() = user_id);
