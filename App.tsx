@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, StyleSheet, View, Text } from 'react-native';
+import { SafeAreaView, StyleSheet, View, Text, ActivityIndicator } from 'react-native';
 import { MapScreen } from './src/components/MapScreen';
-import { DesignSystemPreview } from './src/components/DesignSystemPreview';
+import { AuthScreen } from './src/components/AuthScreen';
+import { useAuth } from './src/hooks/useAuth';
 import { useLocation } from './src/hooks/useLocation';
 import { supabase } from './src/lib/supabase';
 import { colors, spacing, typography } from './src/theme/tokens';
-import { ActivityIndicator } from 'react-native';
 
 interface Spot {
   id: string;
@@ -23,16 +23,12 @@ interface Spot {
 }
 
 export default function App() {
-  const { location, loading: loadingLocation } = useLocation();
-  const [spots, setSpots] = useState<Spot[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [showDesignPreview, setShowDesignPreview] = useState(false);
+  const { user, profile, loading: authLoading } = useAuth();
+  const { location, loading: locationLoading } = useLocation();
+  const [spots, setSpots] = React.useState<Spot[]>([]);
+  const [fetchingSpots, setFetchingSpots] = React.useState(true);
 
-  // Toggle for development - set to false to see real MapScreen
-  const isDevMode = false; // CHANGE THIS TO false TO USE REAL MAP
-
-  useEffect(() => {
+  React.useEffect(() => {
     fetchSpots();
   }, []);
 
@@ -58,46 +54,54 @@ export default function App() {
     } catch (e) {
       console.log('Fetch spots error:', e);
     } finally {
-      setLoading(false);
+      setFetchingSpots(false);
     }
+  }
+
+  function handleAuthSuccess() {
+    console.log('Auth successful');
+    // Navigation will happen automatically via useAuth state change
   }
 
   function handleSpotPress(spot: Spot) {
     console.log('Spot pressed:', spot.title);
-    // Navigate to spot detail
   }
 
   function handleCreateSpot() {
-    console.log('Create new spot');
-    // Navigate to create form
+    console.log('Create new spot - needs auth');
   }
 
-  if (isDevMode) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" />
-        <DesignSystemPreview />
-      </SafeAreaView>
-    );
-  }
-
-  if (loading) {
+  // Show loading state while checking auth
+  if (authLoading || locationLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary[500]} />
-          <Text style={styles.loadingText}>SpotShare wird geladen...</Text>
+          <Text style={styles.loadingText}>
+            {authLoading ? 'Auth wird geprüft...' : 'Standort wird ermittelt...'}
+          </Text>
         </View>
       </SafeAreaView>
     );
   }
 
+  // Show auth screen if not logged in
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="dark" />
+        <AuthScreen onAuthSuccess={handleAuthSuccess} />
+      </SafeAreaView>
+    );
+  }
+
+  // Show main app (map) when logged in
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
       <MapScreen
         userLocation={location}
-        loadingLocation={loadingLocation}
+        loadingLocation={false}
         spots={spots}
         onSpotPress={handleSpotPress}
         onCreateSpot={handleCreateSpot}
