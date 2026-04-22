@@ -4,11 +4,11 @@ import { SafeAreaView, StyleSheet, View, Text, ActivityIndicator, Modal, Touchab
 import { MapScreen } from './src/components/MapScreen';
 import { AuthScreen } from './src/components/AuthScreen';
 import { CreateSpotScreen } from './src/components/CreateSpotScreen';
+import { SpotDetailScreen } from './src/components/SpotDetailScreen';
 import { useAuth } from './src/hooks/useAuth';
 import { useLocation } from './src/hooks/useLocation';
 import { supabase } from './src/lib/supabase';
 import { colors, spacing, typography } from './src/theme/tokens';
-import { X } from 'lucide-react-native';
 
 interface Spot {
   id: string;
@@ -17,10 +17,13 @@ interface Spot {
   latitude: number;
   longitude: number;
   city: string | null;
+  created_at: string;
   avg_rating: number;
   review_count: number;
+  view_count: number;
   created_by: {
     display_name: string | null;
+    username: string;
   };
 }
 
@@ -30,6 +33,7 @@ export default function App() {
   const [spots, setSpots] = useState<Spot[]>([]);
   const [fetchingSpots, setFetchingSpots] = useState(true);
   const [showCreateSpot, setShowCreateSpot] = useState(false);
+  const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
 
   React.useEffect(() => {
     fetchSpots();
@@ -46,9 +50,11 @@ export default function App() {
           latitude,
           longitude,
           city,
+          created_at,
           avg_rating,
           review_count,
-          created_by:profiles!created_by(display_name)
+          view_count,
+          created_by:profiles!created_by(display_name, username)
         `)
         .limit(20);
 
@@ -61,12 +67,17 @@ export default function App() {
     }
   }
 
-  function handleAuthSuccess() {
-    console.log('Auth successful');
+  function handleSpotPress(spot: Spot) {
+    setSelectedSpot(spot);
   }
 
-  function handleSpotPress(spot: Spot) {
-    console.log('Spot pressed:', spot.title);
+  function handleSpotDetailClose() {
+    setSelectedSpot(null);
+  }
+
+  function handleSpotDetailReviewAdded() {
+    // Refresh spots to get updated avg_rating
+    fetchSpots();
   }
 
   function handleCreateSpot() {
@@ -79,7 +90,7 @@ export default function App() {
 
   function handleCreateSpotSuccess() {
     setShowCreateSpot(false);
-    fetchSpots(); // Refresh spots list
+    fetchSpots();
   }
 
   // Show loading state while checking auth
@@ -101,12 +112,11 @@ export default function App() {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar style="dark" />
-        <AuthScreen onAuthSuccess={handleAuthSuccess} />
+        <AuthScreen onAuthSuccess={() => {}} />
       </SafeAreaView>
     );
   }
 
-  // Show main app (map) when logged in
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
@@ -130,6 +140,22 @@ export default function App() {
           onSuccess={handleCreateSpotSuccess}
           initialLocation={location}
         />
+      </Modal>
+
+      {/* Spot Detail Modal */}
+      <Modal
+        visible={!!selectedSpot}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={handleSpotDetailClose}
+      >
+        {selectedSpot && (
+          <SpotDetailScreen
+            spot={selectedSpot}
+            onClose={handleSpotDetailClose}
+            onReviewAdded={handleSpotDetailReviewAdded}
+          />
+        )}
       </Modal>
     </SafeAreaView>
   );
